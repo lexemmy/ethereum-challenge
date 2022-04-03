@@ -15,21 +15,66 @@ contract Staker {
   // Collect funds in a payable `stake()` function and track individual `balances` with a mapping:
   //  ( make sure to add a `Stake(address,uint256)` event and emit it for the frontend <List/> display )
 
+    mapping ( address => uint256 ) public balances;
+    uint256 public constant threshold = 1 ether;
+    
+    event Stake(address indexed sender, uint256 stakedAmount);
+
+    function stake() public payable {
+    require(msg.value > 0, "you cannot stake 0 ether");
+
+    balances[msg.sender] += msg.value;
+    emit Stake(msg.sender, msg.value);
+  }
+
 
   // After some `deadline` allow anyone to call an `execute()` function
   //  It should either call `exampleExternalContract.complete{value: address(this).balance}()` to send all the value
 
+  uint256 public deadline = block.timestamp + 72 hours;
+
+  function execute() public{
+    //execution should only be done after deadline has been reached
+    require(timeLeft() == 0, "Deadline hasn't been reached, time still dey");
+
+    uint256 totalBalance = address(this).balance;
+
+    require(totalBalance >= threshold, "Threshold hasn't been hit yet");
+
+    (bool sent,) = address(exampleExternalContract).call{value: totalBalance}(abi.encodeWithSignature("complete()"));
+    require(sent, "exampleExternalContract failed");
+  }
 
   // if the `threshold` was not met, allow everyone to call a `withdraw()` function
+    // Add a `withdraw()` function to let users withdraw their balance
+  function withdraw() public {
 
+    uint256 totalBalance = address(this).balance;
+    require(totalBalance < threshold, "Threshold has been hit");
 
-  // Add a `withdraw()` function to let users withdraw their balance
+    uint stakerBalance = balances[msg.sender];
+    
+    require(timeLeft() == 0, "Deadline hasn't been reached yet");
+    require(stakerBalance > 0, "You don't have enough to withdraw");
 
+    balances[msg.sender] = 0;
+
+    address staker = msg.sender;
+
+    //send the balance back
+    (bool sent,) = staker.call{value: stakerBalance}("");
+    require(sent, "Failed sending the staker balance back to this staker");
+  }
 
   // Add a `timeLeft()` view function that returns the time left before the deadline for the frontend
-
+  function timeLeft() public view returns(uint256 timeleft) {
+    return deadline >= block.timestamp ? deadline - block.timestamp : 0;
+  }
 
   // Add the `receive()` special function that receives eth and calls stake()
+  receive() payable external {
+    stake();
+  }
 
 
 }
